@@ -98,3 +98,9 @@ class AgentState(InputState):
         )
     )
     """Result of evaluating retrieved evidence for support, conflicts, and coverage."""
+    research_loop_count: int = 0
+    """Number of autonomous re-planning / evidence collection loops executed."""
+    max_research_loops: int = 2
+    """Maximum allowed autonomous re-planning loops to safeguard API limits."""
+    followup_queries: list[str] = field(default_factory=list)
+    """List of dynamic follow-up research queries generated to fill evidence gaps."""

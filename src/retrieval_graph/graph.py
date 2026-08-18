@@ -243,6 +243,48 @@ def check_finished(state: AgentState) -> Literal["verify_evidence", "conduct_res
         return "verify_evidence"
 
 
+async def generate_followup_plan(
+    state: AgentState, *, config: RunnableConfig
+) -> dict[str, Any]:
+    """Generate targeted follow-up research tasks to resolve missing evidence or conflicting claims.
+
+    Increments research_loop_count and updates steps with targeted follow-up queries.
+    """
+    verification = state.evidence_verification or {}
+    missing = verification.get("missing_elements", [])
+    conflicts = verification.get("conflicting_claims", [])
+
+    new_steps = []
+    for item in missing[:2]:
+        new_steps.append(f"Investigate missing evidence: {item}")
+    for item in conflicts[:1]:
+        new_steps.append(f"Resolve conflicting claim: {item}")
+
+    if not new_steps:
+        user_q = state.messages[-1].content if state.messages else "technical query"
+        new_steps = [f"Conduct deeper technical retrieval on {user_q}"]
+
+    return {
+        "steps": new_steps,
+        "research_loop_count": (state.research_loop_count or 0) + 1,
+        "followup_queries": new_steps,
+    }
+
+
+def evaluate_verification_and_route(
+    state: AgentState,
+) -> Literal["generate_followup_plan", "respond"]:
+    """Determine whether to trigger an autonomous re-planning loop or proceed to final response."""
+    verification = state.evidence_verification or {}
+    status = verification.get("status", "supported")
+    loop_count = state.research_loop_count or 0
+    max_loops = state.max_research_loops or 2
+
+    if status in ("insufficient", "conflicting") and loop_count < max_loops:
+        return "generate_followup_plan"
+    return "respond"
+
+
 async def respond(
     state: AgentState, *, config: RunnableConfig
 ) -> dict[str, list[BaseMessage]]:
@@ -280,13 +322,15 @@ builder.add_node(respond_to_general_query)
 builder.add_node(conduct_research)
 builder.add_node(create_research_plan)
 builder.add_node(verify_evidence)
+builder.add_node(generate_followup_plan)
 builder.add_node(respond)
 
 builder.add_edge(START, "analyze_and_route_query")
 builder.add_conditional_edges("analyze_and_route_query", route_query)
 builder.add_edge("create_research_plan", "conduct_research")
 builder.add_conditional_edges("conduct_research", check_finished)
-builder.add_edge("verify_evidence", "respond")
+builder.add_conditional_edges("verify_evidence", evaluate_verification_and_route)
+builder.add_edge("generate_followup_plan", "conduct_research")
 builder.add_edge("ask_for_more_info", END)
 builder.add_edge("respond_to_general_query", END)
 builder.add_edge("respond", END)
@@ -294,3 +338,4 @@ builder.add_edge("respond", END)
 # Compile into a graph object that you can invoke and deploy.
 graph = builder.compile()
 graph.name = "RetrievalGraph"
+

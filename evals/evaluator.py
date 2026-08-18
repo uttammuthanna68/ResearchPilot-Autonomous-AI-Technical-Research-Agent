@@ -49,13 +49,21 @@ def evaluate_response(case: Dict[str, Any], agent_output: Dict[str, Any]) -> Dic
         min_sources = case.get("min_sources", 1)
         retrieval_score = 1.0 if len(documents) >= min_sources else 0.5
 
+    # 6. Autonomous Re-Planning Loop Metric
+    loop_count = agent_output.get("research_loop_count", 0)
+    if verification_status in ("insufficient", "conflicting"):
+        replan_score = 1.0 if loop_count >= 1 else 0.8
+    else:
+        replan_score = 1.0
+
     # Weighted Overall Score
     overall_score = round(
-        (0.3 * relevance_score)
+        (0.25 * relevance_score)
         + (0.2 * grounding_score)
         + (0.2 * citation_score)
         + (0.1 * retrieval_score)
-        + (0.2 * safeguard_score),
+        + (0.15 * safeguard_score)
+        + (0.1 * replan_score),
         2,
     )
 
@@ -75,8 +83,11 @@ def evaluate_response(case: Dict[str, Any], agent_output: Dict[str, Any]) -> Dic
             "citation_score": round(citation_score, 2),
             "retrieval_score": round(retrieval_score, 2),
             "safeguard_score": round(safeguard_score, 2),
+            "replan_score": round(replan_score, 2),
         },
         "matched_concepts": matched_concepts,
         "source_count": len(documents),
         "verification_status": verification_status,
+        "research_loop_count": loop_count,
     }
+

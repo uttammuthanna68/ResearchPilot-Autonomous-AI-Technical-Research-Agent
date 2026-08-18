@@ -5,7 +5,7 @@ import asyncio
 import os
 from typing import Literal, Optional
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -13,7 +13,7 @@ from langchain_core.runnables import RunnableConfig
 
 from index_graph import graph as index_graph
 from retrieval_graph import graph as retrieval_graph
-from shared import history_db
+from shared import history_db, document_loader, retrieval
 
 load_dotenv()
 history_db.init_db()
@@ -41,6 +41,57 @@ def health_check():
     return {"status": "ok", "gemini_api_key_configured": has_key}
 
 
+@app.get("/api/documents/stats")
+def get_document_stats():
+    """Retrieve document count stats from ChromaDB vector store."""
+    try:
+        from langchain_chroma import Chroma
+        from shared.retrieval import make_text_encoder
+        encoder = make_text_encoder("google_genai/gemini-embedding-001")
+        vstore = Chroma(collection_name="research_pilot", embedding_function=encoder, persist_directory="./data/chroma")
+        count = vstore._collection.count()
+        return {"status": "ok", "document_count": count}
+    except Exception as e:
+        return {"status": "ok", "document_count": 0, "detail": str(e)}
+
+
+@app.post("/api/documents/upload")
+async def upload_document(file: UploadFile = File(...)):
+    """Upload and chunk a document (PDF, TXT, MD, JSON) into ChromaDB."""
+    _ensure_env()
+    try:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+        docs = document_loader.load_and_chunk_file(
+            file_bytes=content,
+            filename=file.filename or "uploaded_document.txt",
+            content_type=file.content_type,
+        )
+
+        config = RunnableConfig(
+            configurable={
+                "retriever_provider": "chroma",
+                "embedding_model": "google_genai/gemini-embedding-001",
+            }
+        )
+
+        with retrieval.make_retriever(config) as retriever:
+            await retriever.aadd_documents(docs)
+
+        return {
+            "status": "success",
+            "filename": file.filename,
+            "chunk_count": len(docs),
+            "message": f"Successfully indexed {len(docs)} document chunks into Knowledge Base.",
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process document upload: {e}")
+
+
 @app.get("/api/history")
 def get_history():
     """Retrieve list of completed research sessions."""
@@ -66,6 +117,7 @@ def delete_history_session(session_id: str):
     if not deleted:
         raise HTTPException(status_code=404, detail="Research session not found")
     return {"status": "success", "id": session_id}
+
 
 
 def _ensure_env():
@@ -127,6 +179,8 @@ async def stream_research(request: ResearchRequest):
             steps = result.get("steps", [])
             docs = result.get("documents", [])
             verification = result.get("evidence_verification", {})
+            loop_count = result.get("research_loop_count", 0)
+            followup_queries = result.get("followup_queries", [])
 
             yield f"data: {json.dumps({'event': 'stage', 'stage': 'planning', 'status': 'completed', 'tasks': steps})}\n\n"
 
@@ -151,9 +205,13 @@ async def stream_research(request: ResearchRequest):
 
             yield f"data: {json.dumps({'event': 'stage', 'stage': 'verification', 'status': 'running'})}\n\n"
             await asyncio.sleep(0.1)
-            yield f"data: {json.dumps({'event': 'stage', 'stage': 'verification', 'status': 'completed', 'verification': verification})}\n\n"
+            yield f"data: {json.dumps({'event': 'stage', 'stage': 'verification', 'status': 'completed', 'verification': verification, 'research_loop_count': loop_count, 'followup_queries': followup_queries})}\n\n"
+
+            if loop_count > 0:
+                yield f"data: {json.dumps({'event': 'stage', 'stage': 're-planning', 'status': 'completed', 'loop_count': loop_count, 'followup_queries': followup_queries})}\n\n"
 
             yield f"data: {json.dumps({'event': 'stage', 'stage': 'synthesis', 'status': 'running'})}\n\n"
+
 
             last_msg = ""
             if result.get("messages"):
@@ -195,6 +253,8 @@ async def stream_research(request: ResearchRequest):
                 "router": router,
                 "steps": steps,
                 "evidence_verification": verification,
+                "research_loop_count": loop_count,
+                "followup_queries": followup_queries,
                 "documents": formatted_docs,
                 "report": last_msg,
             }
@@ -240,6 +300,8 @@ async def execute_research(request: ResearchRequest):
         steps = result.get("steps", [])
         docs = result.get("documents", [])
         verification = result.get("evidence_verification", {})
+        loop_count = result.get("research_loop_count", 0)
+        followup_queries = result.get("followup_queries", [])
 
         last_msg = ""
         if result.get("messages"):
@@ -288,9 +350,12 @@ async def execute_research(request: ResearchRequest):
             "router": router,
             "steps": steps,
             "evidence_verification": verification,
+            "research_loop_count": loop_count,
+            "followup_queries": followup_queries,
             "documents": formatted_docs,
             "report": last_msg,
         }
+
     except Exception as e:
         print(f"[Server Error] Research execution failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

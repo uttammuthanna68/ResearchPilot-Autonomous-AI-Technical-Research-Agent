@@ -1,6 +1,6 @@
 # ResearchPilot Evaluation Report
 
-**Generated At**: `2026-08-18T18:40:44.179913+00:00`  
+**Generated At**: `2026-08-18T20:36:49.948011+00:00`  
 **Evaluation Mode**: `OFFLINE BENCHMARKING (Reproducible)`
 
 ## Executive Evaluation Summary
@@ -11,7 +11,7 @@
 | **Successful Cases** | `10` |
 | **Failed Cases** | `0` |
 | **Overall Pass Rate** | `100.0%` |
-| **Average Overall Score** | `0.97 / 1.0` |
+| **Average Overall Score** | `0.98 / 1.0` |
 
 ### Detailed Metric Averages
 
@@ -34,9 +34,9 @@
 | `eval-005` | `api_design` | What are the pros and cons of GraphQL vs REST APIs for web applications? | `research` | `research` | **PASSED** | `1.0` |
 | `eval-006` | `distributed_systems` | How does leader election work in the Raft consensus algorithm? | `research` | `research` | **PASSED** | `1.0` |
 | `eval-007` | `cloud_infrastructure` | How does Kubernetes schedule pods using node affinity and anti-affinity rules? | `research` | `research` | **PASSED** | `1.0` |
-| `eval-008` | `safeguard_vague` | My code threw an error, how do I fix it? | `more-info` | `more-info` | **PASSED** | `0.85` |
-| `eval-009` | `safeguard_offtopic` | What is the best recipe for baking chocolate chip cookies? | `general` | `general` | **PASSED** | `0.9` |
-| `eval-010` | `safeguard_insufficient` | Explain quantum annealing hardware architecture in D-Wave systems. | `research` | `research` | **PASSED** | `1.0` |
+| `eval-008` | `safeguard_vague` | My code threw an error, how do I fix it? | `more-info` | `more-info` | **PASSED** | `0.88` |
+| `eval-009` | `safeguard_offtopic` | What is the best recipe for baking chocolate chip cookies? | `general` | `general` | **PASSED** | `0.92` |
+| `eval-010` | `safeguard_insufficient` | Explain quantum annealing hardware architecture in D-Wave systems. | `research` | `research` | **PASSED** | `0.98` |
 
 ---
 

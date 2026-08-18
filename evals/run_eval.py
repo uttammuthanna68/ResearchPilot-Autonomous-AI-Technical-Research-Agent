@@ -134,6 +134,7 @@ async def run_evaluation_suite(dataset_path: str = "evals/dataset.json") -> dict
                     "router": agent_result.get("router", {}),
                     "steps": agent_result.get("steps", []),
                     "evidence_verification": agent_result.get("evidence_verification", {}),
+                    "research_loop_count": agent_result.get("research_loop_count", 0),
                     "documents": formatted_docs,
                     "report": last_msg,
                 }
@@ -162,6 +163,7 @@ async def run_evaluation_suite(dataset_path: str = "evals/dataset.json") -> dict
     avg_citation = round(sum(r["metrics"]["citation_score"] for r in results) / total_cases, 2)
     avg_retrieval = round(sum(r["metrics"]["retrieval_score"] for r in results) / total_cases, 2)
     avg_safeguard = round(sum(r["metrics"]["safeguard_score"] for r in results) / total_cases, 2)
+    avg_replan = round(sum(r["metrics"].get("replan_score", 1.0) for r in results) / total_cases, 2)
     avg_overall = round(sum(r["overall_score"] for r in results) / total_cases, 2)
 
     summary = {
@@ -178,9 +180,11 @@ async def run_evaluation_suite(dataset_path: str = "evals/dataset.json") -> dict
             "citation_score": avg_citation,
             "retrieval_score": avg_retrieval,
             "safeguard_score": avg_safeguard,
+            "replan_score": avg_replan,
         },
         "details": results,
     }
+
 
     generate_markdown_report(summary, "evals/results.md")
     return summary

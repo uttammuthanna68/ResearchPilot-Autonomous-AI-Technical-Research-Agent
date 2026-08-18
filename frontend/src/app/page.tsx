@@ -44,6 +44,8 @@ interface ResearchResponse {
   router?: { type: string; logic: string };
   steps: string[];
   evidence_verification: EvidenceVerification;
+  research_loop_count?: number;
+  followup_queries?: string[];
   documents: DocumentSource[];
   report: string;
 }
@@ -77,13 +79,61 @@ export default function Home() {
   const [showHistory, setShowHistory] = useState(false);
   const [activeTab, setActiveTab] = useState<"report" | "sources" | "verification">("report");
   const [backendStatus, setBackendStatus] = useState<"checking" | "connected" | "offline">("checking");
+  const [docCount, setDocCount] = useState<number>(0);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [replanLoopCount, setReplanLoopCount] = useState<number>(0);
 
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
 
   useEffect(() => {
     checkHealth();
     fetchHistory();
+    fetchDocStats();
   }, []);
+
+  const fetchDocStats = async () => {
+    try {
+      const res = await fetch(`${backendUrl}/api/documents/stats`);
+      if (res.ok) {
+        const data = await res.json();
+        setDocCount(data.document_count || 0);
+      }
+    } catch (e) {
+      console.warn("Failed to fetch doc stats:", e);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setUploadMsg(null);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch(`${backendUrl}/api/documents/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to upload document");
+
+      setUploadMsg(`Success: ${data.message}`);
+      fetchDocStats();
+    } catch (err: any) {
+      setUploadMsg(`Error: ${err.message || "Failed to upload file"}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
 
   const checkHealth = async () => {
     try {
@@ -216,17 +266,22 @@ export default function Home() {
               }
 
               if (data.event === "stage") {
+                if (data.stage === "re-planning") {
+                  setReplanLoopCount(data.loop_count || 1);
+                }
                 updateStage(data.stage, data.status);
                 if (data.tasks) setLiveTasks(data.tasks);
                 if (data.source_count !== undefined) setSourceCount(data.source_count);
               } else if (data.event === "complete") {
                 setResult(data);
+                if (data.research_loop_count) setReplanLoopCount(data.research_loop_count);
                 if (data.steps) setLiveTasks(data.steps);
                 if (data.documents) setSourceCount(data.documents.length);
                 setStages((prev) => prev.map((s) => ({ ...s, status: "completed" })));
                 setIsLoading(false);
                 fetchHistory(); // Refresh history list
               }
+
             } catch (e: any) {
               throw e;
             }
@@ -262,6 +317,13 @@ export default function Home() {
 
         <div className="flex items-center gap-3">
           <button
+            onClick={() => setShowUploadModal(true)}
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-xs font-medium text-indigo-200 transition-all"
+          >
+            <span>📁 Upload Docs ({docCount})</span>
+          </button>
+
+          <button
             onClick={() => setShowHistory(!showHistory)}
             className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-200 transition-all"
           >
@@ -293,6 +355,60 @@ export default function Home() {
           )}
         </div>
       </header>
+
+      {/* Document Ingestion Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <span>📁 Upload Custom Documents</span>
+              </h3>
+              <button
+                onClick={() => { setShowUploadModal(false); setUploadMsg(null); }}
+                className="text-slate-400 hover:text-white text-sm"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-400">
+              Upload PDF, Markdown, Text, or JSON files to index them directly into ChromaDB vector store for autonomous research retrieval.
+            </p>
+            <div className="border-2 border-dashed border-slate-700 hover:border-indigo-500/70 rounded-xl p-6 text-center space-y-3 bg-slate-950/50 transition-all">
+              <input
+                type="file"
+                accept=".pdf,.txt,.md,.json"
+                onChange={handleFileUpload}
+                disabled={uploading}
+                id="doc-file-input"
+                className="hidden"
+              />
+              <label
+                htmlFor="doc-file-input"
+                className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg transition-all"
+              >
+                {uploading ? "Processing & Chunking..." : "Choose PDF / TXT / MD File"}
+              </label>
+              <p className="text-[11px] text-slate-500">Supports PDF, Markdown, Plain Text, JSON (Max 25MB)</p>
+            </div>
+            {uploadMsg && (
+              <div className={`p-3 rounded-xl text-xs ${uploadMsg.startsWith("Success") ? "bg-emerald-950/80 border border-emerald-800/60 text-emerald-300" : "bg-rose-950/80 border border-rose-800/60 text-rose-300"}`}>
+                {uploadMsg}
+              </div>
+            )}
+            <div className="flex justify-between items-center text-xs text-slate-400 pt-2 border-t border-slate-800">
+              <span>Indexed Document Chunks: <strong className="text-indigo-400">{docCount}</strong></span>
+              <button
+                onClick={() => { setShowUploadModal(false); setUploadMsg(null); }}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Persistent Research History Slide-Over Drawer */}
       {showHistory && (
@@ -582,46 +698,46 @@ export default function Home() {
             </div>
 
             {activeTab === "report" && (
-              <div className="prose prose-invert max-w-none text-slate-200 text-sm leading-relaxed whitespace-pre-wrap font-sans space-y-4">
+              <div className="prose prose-invert max-w-none text-slate-200 text-sm leading-relaxed whitespace-pre-wrap font-sans space-y-4 break-words overflow-x-auto">
                 {result.report}
               </div>
             )}
 
             {activeTab === "verification" && (
-              <div className="space-y-4">
-                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
+              <div className="space-y-4 min-w-0 max-w-full">
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2 min-w-0">
                   <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Verification Summary</h4>
-                  <p className="text-sm text-slate-300">{result.evidence_verification?.summary || "Evidence verified across sources."}</p>
+                  <p className="text-sm text-slate-300 break-words">{result.evidence_verification?.summary || "Evidence verified across sources."}</p>
                 </div>
 
                 {result.evidence_verification?.verified_claims?.length > 0 && (
-                  <div className="bg-emerald-950/40 border border-emerald-800/60 rounded-xl p-4 space-y-2">
+                  <div className="bg-emerald-950/40 border border-emerald-800/60 rounded-xl p-4 space-y-2 min-w-0">
                     <h4 className="text-xs font-bold text-emerald-300 uppercase tracking-wider">Verified Claims</h4>
-                    <ul className="list-disc list-inside text-xs text-emerald-200 space-y-1">
+                    <ul className="list-disc list-inside text-xs text-emerald-200 space-y-1 break-words">
                       {result.evidence_verification.verified_claims.map((claim, idx) => (
-                        <li key={idx}>{claim}</li>
+                        <li key={idx} className="break-words">{claim}</li>
                       ))}
                     </ul>
                   </div>
                 )}
 
                 {result.evidence_verification?.conflicting_claims?.length > 0 && (
-                  <div className="bg-amber-950/40 border border-amber-800/60 rounded-xl p-4 space-y-2">
+                  <div className="bg-amber-950/40 border border-amber-800/60 rounded-xl p-4 space-y-2 min-w-0">
                     <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider">Conflicting Claims Detected</h4>
-                    <ul className="list-disc list-inside text-xs text-amber-200 space-y-1">
+                    <ul className="list-disc list-inside text-xs text-amber-200 space-y-1 break-words">
                       {result.evidence_verification.conflicting_claims.map((claim, idx) => (
-                        <li key={idx}>{claim}</li>
+                        <li key={idx} className="break-words">{claim}</li>
                       ))}
                     </ul>
                   </div>
                 )}
 
                 {result.evidence_verification?.missing_elements?.length > 0 && (
-                  <div className="bg-rose-950/40 border border-rose-800/60 rounded-xl p-4 space-y-2">
+                  <div className="bg-rose-950/40 border border-rose-800/60 rounded-xl p-4 space-y-2 min-w-0">
                     <h4 className="text-xs font-bold text-rose-300 uppercase tracking-wider">Context Gaps & Missing Information</h4>
-                    <ul className="list-disc list-inside text-xs text-rose-200 space-y-1">
+                    <ul className="list-disc list-inside text-xs text-rose-200 space-y-1 break-words">
                       {result.evidence_verification.missing_elements.map((gap, idx) => (
-                        <li key={idx}>{gap}</li>
+                        <li key={idx} className="break-words">{gap}</li>
                       ))}
                     </ul>
                   </div>
@@ -630,28 +746,28 @@ export default function Home() {
             )}
 
             {activeTab === "sources" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0 max-w-full">
                 {(result.documents || []).map((doc, idx) => (
-                  <div key={idx} className="bg-slate-950 border border-slate-800 hover:border-blue-500/50 rounded-xl p-4 transition-all flex flex-col justify-between space-y-3">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800/50">
+                  <div key={idx} className="bg-slate-950 border border-slate-800 hover:border-blue-500/50 rounded-xl p-4 transition-all flex flex-col justify-between space-y-3 min-w-0 max-w-full overflow-hidden">
+                    <div className="min-w-0">
+                      <div className="flex items-center justify-between mb-2 gap-2 min-w-0">
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800/50 truncate max-w-[70%]">
                           {doc.source}
                         </span>
-                        <span className="text-xs text-slate-500 font-mono">[{idx + 1}]</span>
+                        <span className="text-xs text-slate-500 font-mono shrink-0">[{idx + 1}]</span>
                       </div>
-                      <h4 className="font-semibold text-sm text-slate-100 line-clamp-2">{doc.title}</h4>
-                      <p className="text-xs text-slate-400 mt-2 line-clamp-3 leading-relaxed">{doc.snippet}</p>
+                      <h4 className="font-semibold text-sm text-slate-100 line-clamp-2 break-words">{doc.title}</h4>
+                      <p className="text-xs text-slate-400 mt-2 line-clamp-3 leading-relaxed break-words">{doc.snippet}</p>
                     </div>
 
                     <a
                       href={doc.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1 truncate pt-2 border-t border-slate-900"
+                      className="text-xs text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1.5 pt-2 border-t border-slate-900 min-w-0 max-w-full overflow-hidden"
                     >
-                      <span className="truncate">{doc.url}</span>
-                      <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <span className="truncate min-w-0 flex-1 break-all">{doc.url}</span>
+                      <svg className="w-3.5 h-3.5 shrink-0 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
                     </a>
@@ -659,6 +775,7 @@ export default function Home() {
                 ))}
               </div>
             )}
+
           </section>
         )}
       </main>

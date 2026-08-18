@@ -1,12 +1,14 @@
-# ResearchPilot: Autonomous AI Technical Research Agent
-
+[![Live Demo](https://img.shields.io/badge/🚀%20Live%20Demo-Vercel-brightgreen.svg?style=for-the-badge)](https://research-pilot-autonomous-ai-techni.vercel.app/)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
 [![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph-orange.svg)](https://github.com/langchain-ai/langgraph)
 [![Google Gemini](https://img.shields.io/badge/LLM-Google%20Gemini-green.svg)](https://ai.google.dev/)
 [![Next.js 16](https://img.shields.io/badge/Frontend-Next.js%2016-black.svg)](https://nextjs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+> 🌐 **Live Web Application**: [https://research-pilot-autonomous-ai-techni.vercel.app/](https://research-pilot-autonomous-ai-techni.vercel.app/)
+
 **ResearchPilot** is an autonomous, multi-agent AI technical research assistant built with **LangGraph**, **Google Gemini**, **ChromaDB**, **FastAPI**, and **Next.js**. It performs deep, multi-step technical research across software engineering, AI/ML, cloud architecture, system design, and database topics.
+
 
 Unlike simple Q&A chatbots, ResearchPilot executes a structured research pipeline: analyzing technical intent, generating multi-step research plans, retrieving evidence in parallel from both a local vector database and live web search, verifying claim support to prevent hallucinations, and synthesizing cited technical reports.
 
@@ -42,14 +44,15 @@ Unlike simple Q&A chatbots, ResearchPilot executes a structured research pipelin
 
 ## ✨ Key Features
 
-- 🧠 **Autonomous Research Planning**: Decomposes complex inquiries into 1–3 structured sub-investigations and expands each into targeted search queries.
+- 🧠 **Autonomous Research Planning & Re-Planning**: Decomposes complex inquiries into structured research plans and **autonomously loops back** to generate targeted follow-up queries if evidence verification detects context gaps or conflicting claims.
 - ⚡ **Dual Retrieval Engine**: Simultaneously searches an in-process local **ChromaDB** vector store and live **Web Search APIs** using LangGraph `Send` primitives for parallel execution.
+- 📁 **Multi-Format Document Ingestion**: Ingests and chunks **PDFs**, **Markdown**, **Plain Text**, and **JSON** files into ChromaDB vector store via FastAPI file upload modal.
 - 🛡️ **Evidence Verification Engine**: Includes an explicit `verify_evidence` graph node that evaluates claim support (`supported`, `insufficient`, `conflicting`) to enforce strict grounding safeguards and eliminate hallucinations.
 - 📄 **Structured 8-Section Reports**: Formats technical reports with Executive Summary, Key Findings, Detailed Analysis (separating evidence from interpretation), Source References, Conflicting Details, Limitations, and Conclusion.
 - 🔗 **Clickable Numeric Citations**: Maps every factual assertion to numeric in-text citations (`[1]`, `[2]`) linked directly to verified URLs and document metadata.
-- 📊 **Real-Time Next.js Dashboard**: Server-Sent Events (SSE) stream live graph execution progress (stage status, active task list, retrieved source counter) to a dark-themed UI.
+- 📊 **Real-Time Next.js Dashboard**: Server-Sent Events (SSE) stream live graph execution progress (stage status, active task list, re-planning loop counters, retrieved source counter) to a dark-themed UI.
 - 💾 **Persistent Session History**: Embedded **SQLite** database (`./data/history.db`) stores completed research reports, allowing users to reopen or delete historical investigations.
-- 📈 **Automated Evaluation Suite**: 10-case evaluation module (`evals/`) measuring answer relevance, evidence grounding, citation availability, retrieval quality, and safeguard intent routing.
+- 📈 **Automated Evaluation Suite**: 10-case evaluation module (`evals/`) measuring answer relevance, evidence grounding, citation availability, retrieval quality, re-planning loop efficiency, and safeguard intent routing.
 
 ---
 
@@ -79,34 +82,36 @@ Unlike simple Q&A chatbots, ResearchPilot executes a structured research pipelin
                                              │
                                              ▼
                                ┌───────────────────────────┐
-                               │ Execute Researcher Subgraph│
-                               │  (Send Parallel Tasks)    │
-                               └──────┬─────────────┬──────┘
-                                      │             │
-                       ┌──────────────┘             └──────────────┐
-                       ▼                                           ▼
-          ┌─────────────────────────┐                 ┌─────────────────────────┐
-          │  Local ChromaDB Vector  │                 │  Web Search Engine API  │
-          │     (`knowledge_base`)  │                 │     (`web_search`)      │
-          └────────────┬────────────┘                 └────────────┬────────────┘
-                       │                                           │
-                       └────────────────────┬──────────────────────┘
-                                            ▼
-                               ┌───────────────────────────┐
-                               │      Evidence Layer       │
-                               │  (Deduplicate via MD5)    │
-                               └────────────┬──────────────┘
-                                            ▼
-                               ┌───────────────────────────┐
-                               │   Evidence Verification   │
+                               │ Execute Researcher Subgraph│◄─────────────────┐
+                               │  (Send Parallel Tasks)    │                  │
+                               └──────┬─────────────┬──────┘                  │
+                                      │             │                         │ Re-planning Loop
+                       ┌──────────────┘             └──────────────┐          │ (if insufficient /
+                       ▼                                           ▼          │  conflicting &
+          ┌─────────────────────────┐                 ┌─────────────────────────┐ │  loop_count < max)
+          │  Local ChromaDB Vector  │                 │  Web Search Engine API  │ │
+          │  (PDF / Text / Markdown)│                 │     (`web_search`)      │ │
+          └────────────┬────────────┘                 └────────────┬────────────┘ │
+                       │                                           │              │
+                       └────────────────────┬──────────────────────┘              │
+                                            ▼                                     │
+                               ┌───────────────────────────┐                      │
+                               │      Evidence Layer       │                      │
+                               │  (Deduplicate via MD5)    │                      │
+                               └────────────┬──────────────┘                      │
+                                            ▼                                     │
+                               ┌───────────────────────────┐                      │
+                               │   Evidence Verification   │──────────────────────┘
                                │   (`verify_evidence`)     │
                                └────────────┬──────────────┘
+                                            │ (supported OR max loops reached)
                                             ▼
                                ┌───────────────────────────┐
                                │ Structured Report Synthesizer
                                │  (8-Section Cited Report) │
                                └───────────────────────────┘
 ```
+
 
 ---
 
