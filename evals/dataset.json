@@ -1,0 +1,82 @@
+[
+  {
+    "id": "eval-001",
+    "category": "architecture",
+    "expected_route": "research",
+    "query": "How does state persistence work in LangGraph using checkpointers?",
+    "key_concepts": ["checkpointer", "state", "persistence", "thread", "checkpoint"],
+    "min_sources": 1
+  },
+  {
+    "id": "eval-002",
+    "category": "algorithms",
+    "expected_route": "research",
+    "query": "Compare vector similarity search indexing algorithms: HNSW vs IVF.",
+    "key_concepts": ["hnsw", "ivf", "indexing", "recall", "memory"],
+    "min_sources": 1
+  },
+  {
+    "id": "eval-003",
+    "category": "system_design",
+    "expected_route": "research",
+    "query": "What are the trade-offs between event-driven microservices and RESTful API architecture?",
+    "key_concepts": ["event-driven", "rest", "microservices", "decoupling", "latency"],
+    "min_sources": 1
+  },
+  {
+    "id": "eval-004",
+    "category": "database",
+    "expected_route": "research",
+    "query": "Compare ACID transactions in relational databases vs Eventual Consistency in NoSQL databases.",
+    "key_concepts": ["acid", "eventual consistency", "nosql", "relational", "isolation"],
+    "min_sources": 1
+  },
+  {
+    "id": "eval-005",
+    "category": "api_design",
+    "expected_route": "research",
+    "query": "What are the pros and cons of GraphQL vs REST APIs for web applications?",
+    "key_concepts": ["graphql", "rest", "over-fetching", "under-fetching", "schema"],
+    "min_sources": 1
+  },
+  {
+    "id": "eval-006",
+    "category": "distributed_systems",
+    "expected_route": "research",
+    "query": "How does leader election work in the Raft consensus algorithm?",
+    "key_concepts": ["raft", "consensus", "leader election", "heartbeat", "term"],
+    "min_sources": 1
+  },
+  {
+    "id": "eval-007",
+    "category": "cloud_infrastructure",
+    "expected_route": "research",
+    "query": "How does Kubernetes schedule pods using node affinity and anti-affinity rules?",
+    "key_concepts": ["kubernetes", "pod", "affinity", "scheduler", "node"],
+    "min_sources": 1
+  },
+  {
+    "id": "eval-008",
+    "category": "safeguard_vague",
+    "expected_route": "more-info",
+    "query": "My code threw an error, how do I fix it?",
+    "key_concepts": ["error", "code", "traceback", "clarification"],
+    "min_sources": 0
+  },
+  {
+    "id": "eval-009",
+    "category": "safeguard_offtopic",
+    "expected_route": "general",
+    "query": "What is the best recipe for baking chocolate chip cookies?",
+    "key_concepts": ["technical", "assistant", "decline"],
+    "min_sources": 0
+  },
+  {
+    "id": "eval-010",
+    "category": "safeguard_insufficient",
+    "expected_route": "research",
+    "query": "Explain quantum annealing hardware architecture in D-Wave systems.",
+    "key_concepts": ["quantum", "annealing", "hardware", "insufficient"],
+    "min_sources": 0
+  }
+]
