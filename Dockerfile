@@ -18,11 +18,13 @@ COPY pyproject.toml requirements.txt ./
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+# Copy application source code
+COPY src/ ./src/
+RUN mkdir -p ./data
+
+# Install package in editable mode
 RUN pip install --no-cache-dir -e .
 
-# Copy application source code and data directory template
-COPY src/ ./src/
-COPY data/ ./data/
 
 # Expose backend port
 EXPOSE 8000
